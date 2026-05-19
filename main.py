@@ -7,8 +7,8 @@ from threading import Thread
 
 # ================== 1. إعداد المسارات المطلقة لبيئة حاويات Render ==================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR,  bot_data.db )
-UPLOADS_DIR = os.path.join(BASE_DIR,  uploads )
+DB_PATH = os.path.join(BASE_DIR, 'bot_data.db')
+UPLOADS_DIR = os.path.join(BASE_DIR, 'uploads')
 
 if not os.path.exists(UPLOADS_DIR):
     os.makedirs(UPLOADS_DIR)
@@ -23,21 +23,21 @@ CHANNEL_USERNAME = "@hafz45bot"
 
 bot = telebot.TeleBot(TOKEN)
 
-# ================== 3. دالات قاعدة البيانات وفحص الاشتراك (تم تقديمها لمنع الـ Crash) ==================
+# ================== 3. دالات قاعدة البيانات وفحص الاشتراك ==================
 def init_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute(   
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY, 
-            status TEXT DEFAULT  inactive , 
+            status TEXT DEFAULT 'inactive', 
             file_path TEXT
         )
-       )
+    ''')
     conn.commit()
     conn.close()
 
-# تهيئة قاعدة البيانات فوراً عند تشغيل الملف
+# تهيئة قاعدة البيانات فوراً عند التشغيل
 init_db()
 
 def is_subscribed(user_id):
@@ -46,9 +46,9 @@ def is_subscribed(user_id):
     cursor.execute("SELECT status FROM users WHERE user_id = ?", (user_id,))
     row = cursor.fetchone()
     conn.close()
-    return row and row[0] ==  active 
+    return row and row[0] == 'active'
 
-def activate_user(user_id, status= active ):
+def activate_user(user_id, status='active'):
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT OR REPLACE INTO users (user_id, status) VALUES (?, ?)", (user_id, status))
@@ -58,33 +58,33 @@ def activate_user(user_id, status= active ):
 def check_channel_sub(user_id):
     try:
         member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        return member.status in [ member ,  administrator ,  creator ]
+        return member.status in ['member', 'administrator', 'creator']
     except:
         return True 
 
-# ================== 4. إعداد خادم Flask والـ API (تستدعي الدالات المعرفة بأمان الآن) ==================
+# ================== 4. إعداد خادم Flask والـ API لـ Render ==================
 app = Flask(__name__)
 
-@app.route( / )
+@app.route('/')
 def home():
     return "البوت يعمل بكامل طاقته!"
 
-@app.route( /api/check_status/<user_id> , methods=[ GET ])
+@app.route('/api/check_status/<user_id>', methods=['GET'])
 def check_status(user_id):
     if is_subscribed(user_id):
         return jsonify({"user_id": user_id, "status": "active"})
     return jsonify({"user_id": user_id, "status": "inactive"})
 
 def run():
-    port = int(os.environ.get( PORT , 10000))
-    app.run(host= 0.0.0.0 , port=port)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
 
-# تشغيل خادم الويب في خيط عمل مستقل مرن
+# تشغيل خادم الويب في Thread مستقل مرن
 t = Thread(target=run)
 t.daemon = True  
 t.start()
 
-# ================== 5. أزرار اللوحة الرئيسية الكاملة ==================
+# ================== 5. أزرار اللوحة الرئيسية ==================
 def main_keyboard():
     m = types.InlineKeyboardMarkup(row_width=2)
     m.add(
@@ -102,12 +102,12 @@ def start(message):
     cursor = conn.cursor()
     cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (uid,))
     if not cursor.fetchone():
-        activate_user(uid, status= inactive )
+        activate_user(uid, status='inactive')
     conn.close()
 
     if not check_channel_sub(uid):
         m = types.InlineKeyboardMarkup(row_width=1)
-        m.add(types.InlineKeyboardButton("📢 اشترك في القناة أولاً", url=f"https://t.me/{CHANNEL_USERNAME.replace( @ ,   )}"),
+        m.add(types.InlineKeyboardButton("📢 اشترك في القناة أولاً", url=f"https://t.me/{CHANNEL_USERNAME.replace('@', '')}"),
               types.InlineKeyboardButton("✅ تم الاشتراك (تأكيد)", callback_data="check_sub_again"))
         bot.send_message(uid, "⚠️ **عذراً، الوصول مقيد!**\n\nيجب عليك الاشتراك في القناة الرسمية لتتمكن من استخدام كافة ميزات المنصة.", reply_markup=m)
         return
@@ -202,7 +202,7 @@ def handle_callbacks(call):
         data_parts = call.data.split("_")
         user_id = int(data_parts[1])
         duration = data_parts[2] if len(data_parts) > 2 else "محدد"
-        activate_user(user_id, status= active )
+        activate_user(user_id, status='active')
         bot.send_message(user_id, f"✅ تم تفعيل اشتراكك يدوياً بنجاح! ({duration})")
         bot.answer_callback_query(call.id, "تم تفعيل المشترك بنجاح")
         try:
@@ -219,12 +219,13 @@ def handle_callbacks(call):
         except:
             pass
 
-@bot.message_handler(content_types=[ successful_payment ])
+# --- هنا تم إصلاح الأخطاء البرمجية (Syntax) التي تسببت بانهيار السيرفر وعودتها لنصوص سليمة ---
+@bot.message_handler(content_types=['successful_payment'])
 def successful_payment(message):
-    activate_user(message.chat.id, status= active )
+    activate_user(message.chat.id, status='active')
     bot.reply_to(message, "✅ شكراً لك! تم تفعيل اشتراك النجوم تلقائياً بنجاح.")
 
-@bot.message_handler(content_types=[ photo ])
+@bot.message_handler(content_types=['photo'])
 def handle_receipt(message):
     uid = message.chat.id
     
@@ -253,7 +254,7 @@ def save_apk_file(message):
         downloaded_file = bot.download_file(file_info.file_path)
         
         save_path = os.path.join(UPLOADS_DIR, f"{message.chat.id}_{message.document.file_name}")
-        with open(save_path,  wb ) as new_file:
+        with open(save_path, 'wb') as new_file:
             new_file.write(downloaded_file)
         
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -266,6 +267,5 @@ def save_apk_file(message):
         print(f"Upload error: {e}")
 
 if __name__ == "__main__":
-    print("البوت بدأ العمل الآن...")
+    print("البوت بدأ العمل الآن بدون أخطاء...")
     bot.infinity_polling()
-
