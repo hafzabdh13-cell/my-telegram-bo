@@ -6,7 +6,7 @@ from flask import Flask, jsonify
 from threading import Thread
 
 # ================== الإعدادات ==================
-TOKEN = os.environ.get('TOKEN', "8675468296:AAFjLWMdHqHK-H3IuGFbH201xog-UWBGb3s")
+TOKEN = os.environ.get("TOKEN", "8675468296:AAFjLWMdHqHK-H3IuGFbH201xog-UWBGb3s")
 ADMIN_ID = 8617632424
 OWNER_NAME = "حافظ عبده احمد عبدالرحمن احمد"
 JAIB_ACCOUNT = "784714890"
@@ -16,55 +16,55 @@ CHANNEL_USERNAME = "@hafz45bot"
 # --- إعداد الخادم والـ API ---
 app = Flask(__name__)
 
-@app.route('/')
+@app.route( / )
 def home():
     return "البوت يعمل بكامل طاقته!"
 
-@app.route('/api/check_status/<user_id>', methods=['GET'])
+@app.route( /api/check_status/<user_id> , methods=[ GET ])
 def check_status(user_id):
     if is_subscribed(user_id):
         return jsonify({"user_id": user_id, "status": "active"})
     return jsonify({"user_id": user_id, "status": "inactive"})
 
 def run():
-    app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 8080)))
+    app.run(host= 0.0.0.0 , port=int(os.environ.get( PORT , 8080)))
 
 t = Thread(target=run)
 t.start()
 
 bot = telebot.TeleBot(TOKEN)
 
-if not os.path.exists('uploads'):
-    os.makedirs('uploads')
+if not os.path.exists( uploads ):
+    os.makedirs( uploads )
 
 def init_db():
-    conn = sqlite3.connect('bot_data.db')
+    conn = sqlite3.connect( bot_data.db )
     cursor = conn.cursor()
-    cursor.execute('CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, status TEXT, file_path TEXT)')
+    cursor.execute( CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, status TEXT, file_path TEXT) )
     conn.commit()
     conn.close()
 
 init_db()
 
 def is_subscribed(user_id):
-    conn = sqlite3.connect('bot_data.db')
+    conn = sqlite3.connect( bot_data.db )
     cursor = conn.cursor()
     cursor.execute("SELECT status FROM users WHERE user_id = ?", (user_id,))
     row = cursor.fetchone()
     conn.close()
-    return row and row[0] == 'active'
+    return row and row[0] ==  active 
 
 def activate_user(user_id):
-    conn = sqlite3.connect('bot_data.db')
+    conn = sqlite3.connect( bot_data.db )
     cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO users (user_id, status) VALUES (?, ?)", (user_id, 'active'))
+    cursor.execute("INSERT OR REPLACE INTO users (user_id, status) VALUES (?, ?)", (user_id,  active ))
     conn.commit()
     conn.close()
 
 def check_channel_sub(user_id):
     try:
         member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        return member.status in ['member', 'administrator', 'creator']
+        return member.status in [ member ,  administrator ,  creator ]
     except:
         return True
 
@@ -83,7 +83,7 @@ def start(message):
     uid = message.chat.id
     if not check_channel_sub(uid):
         m = types.InlineKeyboardMarkup(row_width=1)
-        m.add(types.InlineKeyboardButton("📢 اشترك في القناة أولاً", url=f"https://t.me/{CHANNEL_USERNAME.replace('@', '')}"),
+        m.add(types.InlineKeyboardButton("📢 اشترك في القناة أولاً", url=f"https://t.me/{CHANNEL_USERNAME.replace( @ ,   )}"),
               types.InlineKeyboardButton("✅ تم الاشتراك (تأكيد)", callback_data="check_sub_again"))
         bot.send_message(uid, "⚠️ **عذراً، الوصول مقيد!**\n\nيجب عليك الاشتراك في القناة الرسمية لتتمكن من استخدام كافة ميزات المنصة.", reply_markup=m)
         return
@@ -105,7 +105,10 @@ def handle_callbacks(call):
     
     if call.data == "check_sub_again":
         if check_channel_sub(uid):
-            bot.delete_message(uid, call.message.message_id)
+            try:
+                bot.delete_message(uid, call.message.message_id)
+            except:
+                pass
             start(call.message)
         else:
             bot.answer_callback_query(call.id, "❌ لم تشترك في القناة بعد!", show_alert=True)
@@ -173,25 +176,31 @@ def handle_callbacks(call):
 
     elif call.data.startswith("approve_"):
         data_parts = call.data.split("_")
-        user_id = data_parts[1]
+        user_id = int(data_parts[1])
         duration = data_parts[2] if len(data_parts) > 2 else "محدد"
         activate_user(user_id)
         bot.send_message(user_id, f"✅ تم تفعيل اشتراكك يدوياً بنجاح! ({duration})")
         bot.answer_callback_query(call.id, "تم تفعيل المشترك بنجاح")
-        bot.delete_message(chat_id=ADMIN_ID, message_id=call.message.message_id)
+        try:
+            bot.delete_message(chat_id=ADMIN_ID, message_id=call.message.message_id)
+        except:
+            pass
 
     elif call.data.startswith("decline_"):
-        user_id = call.data.split("_")[1]
+        user_id = int(call.data.split("_")[1])
         bot.send_message(user_id, "❌ معذرةً، تم رفض التحويل. يرجى التأكد من السند وإعادة الإرسال أو التواصل مع الدعم.")
         bot.answer_callback_query(call.id, "تم رفض السند")
-        bot.delete_message(chat_id=ADMIN_ID, message_id=call.message.message_id)
+        try:
+            bot.delete_message(chat_id=ADMIN_ID, message_id=call.message.message_id)
+        except:
+            pass
 
-@bot.message_handler(content_types=['successful_payment'])
+@bot.message_handler(content_types=[ successful_payment ])
 def successful_payment(message):
     activate_user(message.chat.id)
     bot.reply_to(message, "✅ شكراً لك! تم تفعيل اشتراك النجوم تلقائياً بنجاح.")
 
-@bot.message_handler(content_types=['photo'])
+@bot.message_handler(content_types=[ photo ])
 def handle_receipt(message):
     uid = message.chat.id
     
@@ -204,8 +213,12 @@ def handle_receipt(message):
         types.InlineKeyboardButton("❌ إلغاء / رفض", callback_data=f"decline_{uid}")
     )
     
-    bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"💳 **سند دفع جديد وصل!**\n\n👤 ايدي المستخدم: `{uid}`", reply_markup=m, parse_mode="Markdown")
-    bot.reply_to(message, "⏳ تم إرسال السند إلى الإدارة بنجاح. سيتم مراجعته وتفعيل حسابك خلال دقائق.")
+    try:
+        bot.send_photo(ADMIN_ID, message.photo[-1].file_id, caption=f"💳 **سند دفع جديد وصل!**\n\n👤 ايدي المستخدم: `{uid}`", reply_markup=m, parse_mode="Markdown")
+        bot.reply_to(message, "⏳ تم إرسال السند إلى الإدارة بنجاح. سيتم مراجعته وتفعيل حسابك خلال دقائق.")
+    except Exception as e:
+        bot.reply_to(message, "❌ فشل إرسال السند للإدارة، تأكد من إعداد حساب الآدمن بشكل صحيح.")
+        print(f"Admin send error: {e}")
 
 def save_apk_file(message):
     if not message.document:
@@ -215,10 +228,10 @@ def save_apk_file(message):
         file_info = bot.get_file(message.document.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         save_path = f"uploads/{message.chat.id}_{message.document.file_name}"
-        with open(save_path, 'wb') as new_file:
+        with open(save_path,  wb ) as new_file:
             new_file.write(downloaded_file)
         
-        conn = sqlite3.connect('bot_data.db')
+        conn = sqlite3.connect( bot_data.db )
         conn.cursor().execute("UPDATE users SET file_path = ? WHERE user_id = ?", (save_path, message.chat.id))
         conn.commit()
         conn.close()
@@ -228,4 +241,6 @@ def save_apk_file(message):
         print(f"Upload error: {e}")
 
 if __name__ == "__main__":
-   
+    print("البوت بدأ العمل الآن...")
+    bot.infinity_polling()
+
