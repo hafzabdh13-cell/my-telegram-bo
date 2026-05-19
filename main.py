@@ -5,7 +5,15 @@ import os
 from flask import Flask, jsonify
 from threading import Thread
 
-# ================== الإعدادات ==================
+# ================== 1. إعداد المسارات المطلقة لبيئة حاويات Render ==================
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR,  bot_data.db )
+UPLOADS_DIR = os.path.join(BASE_DIR,  uploads )
+
+if not os.path.exists(UPLOADS_DIR):
+    os.makedirs(UPLOADS_DIR)
+
+# ================== 2. الإعدادات والتكوين الأساسي ==================
 TOKEN = os.environ.get("TOKEN", "8675468296:AAFjLWMdHqHK-H3IuGFbH201xog-UWBGb3s")
 ADMIN_ID = 8617632424
 OWNER_NAME = "حافظ عبده احمد عبدالرحمن احمد"
@@ -13,7 +21,48 @@ JAIB_ACCOUNT = "784714890"
 PHONE_PAY = "784714890"
 CHANNEL_USERNAME = "@hafz45bot" 
 
-# --- إعداد الخادم والـ API ---
+bot = telebot.TeleBot(TOKEN)
+
+# ================== 3. دالات قاعدة البيانات وفحص الاشتراك (تم تقديمها لمنع الـ Crash) ==================
+def init_db():
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute(   
+        CREATE TABLE IF NOT EXISTS users (
+            user_id INTEGER PRIMARY KEY, 
+            status TEXT DEFAULT  inactive , 
+            file_path TEXT
+        )
+       )
+    conn.commit()
+    conn.close()
+
+# تهيئة قاعدة البيانات فوراً عند تشغيل الملف
+init_db()
+
+def is_subscribed(user_id):
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("SELECT status FROM users WHERE user_id = ?", (user_id,))
+    row = cursor.fetchone()
+    conn.close()
+    return row and row[0] ==  active 
+
+def activate_user(user_id, status= active ):
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("INSERT OR REPLACE INTO users (user_id, status) VALUES (?, ?)", (user_id, status))
+    conn.commit()
+    conn.close()
+
+def check_channel_sub(user_id):
+    try:
+        member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
+        return member.status in [ member ,  administrator ,  creator ]
+    except:
+        return True 
+
+# ================== 4. إعداد خادم Flask والـ API (تستدعي الدالات المعرفة بأمان الآن) ==================
 app = Flask(__name__)
 
 @app.route( / )
@@ -27,48 +76,15 @@ def check_status(user_id):
     return jsonify({"user_id": user_id, "status": "inactive"})
 
 def run():
-    app.run(host= 0.0.0.0 , port=int(os.environ.get( PORT , 8080)))
+    port = int(os.environ.get( PORT , 10000))
+    app.run(host= 0.0.0.0 , port=port)
 
+# تشغيل خادم الويب في خيط عمل مستقل مرن
 t = Thread(target=run)
+t.daemon = True  
 t.start()
 
-bot = telebot.TeleBot(TOKEN)
-
-if not os.path.exists( uploads ):
-    os.makedirs( uploads )
-
-def init_db():
-    conn = sqlite3.connect( bot_data.db )
-    cursor = conn.cursor()
-    cursor.execute( CREATE TABLE IF NOT EXISTS users (user_id INTEGER PRIMARY KEY, status TEXT, file_path TEXT) )
-    conn.commit()
-    conn.close()
-
-init_db()
-
-def is_subscribed(user_id):
-    conn = sqlite3.connect( bot_data.db )
-    cursor = conn.cursor()
-    cursor.execute("SELECT status FROM users WHERE user_id = ?", (user_id,))
-    row = cursor.fetchone()
-    conn.close()
-    return row and row[0] ==  active 
-
-def activate_user(user_id):
-    conn = sqlite3.connect( bot_data.db )
-    cursor = conn.cursor()
-    cursor.execute("INSERT OR REPLACE INTO users (user_id, status) VALUES (?, ?)", (user_id,  active ))
-    conn.commit()
-    conn.close()
-
-def check_channel_sub(user_id):
-    try:
-        member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        return member.status in [ member ,  administrator ,  creator ]
-    except:
-        return True
-
-# ================== أزرار اللوحة الرئيسية الكاملة ==================
+# ================== 5. أزرار اللوحة الرئيسية الكاملة ==================
 def main_keyboard():
     m = types.InlineKeyboardMarkup(row_width=2)
     m.add(
@@ -77,10 +93,18 @@ def main_keyboard():
     )
     return m
 
-# ================== المعالجات ==================
+# ================== 6. المعالجات والمستقبلات الخاصة بتليجرام ==================
 @bot.message_handler(commands=["start"])
 def start(message):
     uid = message.chat.id
+    
+    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
+    cursor = conn.cursor()
+    cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (uid,))
+    if not cursor.fetchone():
+        activate_user(uid, status= inactive )
+    conn.close()
+
     if not check_channel_sub(uid):
         m = types.InlineKeyboardMarkup(row_width=1)
         m.add(types.InlineKeyboardButton("📢 اشترك في القناة أولاً", url=f"https://t.me/{CHANNEL_USERNAME.replace( @ ,   )}"),
@@ -178,7 +202,7 @@ def handle_callbacks(call):
         data_parts = call.data.split("_")
         user_id = int(data_parts[1])
         duration = data_parts[2] if len(data_parts) > 2 else "محدد"
-        activate_user(user_id)
+        activate_user(user_id, status= active )
         bot.send_message(user_id, f"✅ تم تفعيل اشتراكك يدوياً بنجاح! ({duration})")
         bot.answer_callback_query(call.id, "تم تفعيل المشترك بنجاح")
         try:
@@ -197,7 +221,7 @@ def handle_callbacks(call):
 
 @bot.message_handler(content_types=[ successful_payment ])
 def successful_payment(message):
-    activate_user(message.chat.id)
+    activate_user(message.chat.id, status= active )
     bot.reply_to(message, "✅ شكراً لك! تم تفعيل اشتراك النجوم تلقائياً بنجاح.")
 
 @bot.message_handler(content_types=[ photo ])
@@ -227,11 +251,12 @@ def save_apk_file(message):
     try:
         file_info = bot.get_file(message.document.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
-        save_path = f"uploads/{message.chat.id}_{message.document.file_name}"
+        
+        save_path = os.path.join(UPLOADS_DIR, f"{message.chat.id}_{message.document.file_name}")
         with open(save_path,  wb ) as new_file:
             new_file.write(downloaded_file)
         
-        conn = sqlite3.connect( bot_data.db )
+        conn = sqlite3.connect(DB_PATH, check_same_thread=False)
         conn.cursor().execute("UPDATE users SET file_path = ? WHERE user_id = ?", (save_path, message.chat.id))
         conn.commit()
         conn.close()
