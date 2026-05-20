@@ -28,13 +28,13 @@ bot = telebot.TeleBot(TOKEN)
 def init_db():
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cursor = conn.cursor()
-    cursor.execute(            
+    cursor.execute("""            
         CREATE TABLE IF NOT EXISTS users (
             user_id INTEGER PRIMARY KEY, 
-            status TEXT DEFAULT  inactive , 
+            status TEXT DEFAULT 'inactive', 
             file_path TEXT
         )
-       )
+    """)
     conn.commit()
     conn.close()
 
@@ -46,9 +46,9 @@ def is_subscribed(user_id):
     cursor.execute("SELECT status FROM users WHERE user_id = ?", (user_id,))
     row = cursor.fetchone()
     conn.close()
-    return row and row[0] ==  active 
+    return row and row[0] == 'active' 
 
-def activate_user(user_id, status= active ):
+def activate_user(user_id, status='active'):
     conn = sqlite3.connect(DB_PATH, check_same_thread=False)
     cursor = conn.cursor()
     cursor.execute("INSERT OR REPLACE INTO users (user_id, status) VALUES (?, ?)", (user_id, status))
@@ -58,26 +58,26 @@ def activate_user(user_id, status= active ):
 def check_channel_sub(user_id):
     try:
         member = bot.get_chat_member(CHANNEL_USERNAME, user_id)
-        return member.status in [ member ,  administrator ,  creator ]
+        return member.status in ['member', 'administrator', 'creator']
     except:
         return True 
 
 # ================== 4. إعداد خادم Flask والـ API لـ Render ==================
 app = Flask(__name__)
 
-@app.route( / )
+@app.route('/')
 def home():
     return "البوت يعمل بكامل طاقته!"
 
-@app.route( /api/check_status/<user_id> , methods=[ GET ])
+@app.route('/api/check_status/<user_id>', methods=['GET'])
 def check_status(user_id):
-    if is_subscribed(user_id):
+    if is_subscribed(int(user_id)):
         return jsonify({"user_id": user_id, "status": "active"})
     return jsonify({"user_id": user_id, "status": "inactive"})
 
 def run():
-    port = int(os.environ.get( PORT , 10000))
-    app.run(host= 0.0.0.0 , port=port)
+    port = int(os.environ.get('PORT', 10000))
+    app.run(host='0.0.0.0', port=port)
 
 t = Thread(target=run)
 t.daemon = True  
@@ -102,12 +102,12 @@ def start(message):
     cursor = conn.cursor()
     cursor.execute("SELECT user_id FROM users WHERE user_id = ?", (uid,))
     if not cursor.fetchone():
-        activate_user(uid, status= inactive )
+        activate_user(uid, status='inactive')
     conn.close()
 
     if not check_channel_sub(uid):
         m = types.InlineKeyboardMarkup(row_width=1)
-        m.add(types.InlineKeyboardButton("📢 اشترك في القناة أولاً", url=f"https://t.me/{CHANNEL_USERNAME.replace( @ ,   )}"),
+        m.add(types.InlineKeyboardButton("📢 اشترك في القناة أولاً", url=f"https://t.me/{CHANNEL_USERNAME.replace('@', '')}"),
               types.InlineKeyboardButton("✅ تم الاشتراك (تأكيد)", callback_data="check_sub_again"))
         bot.send_message(uid, "⚠️ **عذراً، الوصول مقيد!**\n\nيجب عليك الاشتراك في القناة الرسمية لتتمكن من استخدام كافة ميزات المنصة.", reply_markup=m)
         return
@@ -115,7 +115,7 @@ def start(message):
     welcome_text = (
         "💎 **مرحباً بك في منصة حافظ الرقمية** 💎\n\n"
         "حيث تجتمع القوة، السرعة، والأمان في مكان واحد.\n\n"
-        "✨ **لماذا تختارنا؟**\n"
+        "✨ **لماذا تختارنا**\n"
         "🔹 **رفع وتخزين:** استضافة تطبيقاتك (APK) بجودة عالية.\n"
         "🔹 **نظام متطور:** ربط فوري وآمن بين تطبيقاتك وسيرفراتنا.\n"
         "🔹 **دعم تقني:** نحن معك خطوة بخطوة للارتقاء بمشاريعك.\n\n"
@@ -201,7 +201,7 @@ def handle_callbacks(call):
                 title="اشتراك منصة حافظ", 
                 description=f"اشتراك بقيمة {amount} نجمة", 
                 invoice_payload="stars_pay", 
-                provider_token="", # يترك فارغاً عند الدفع بالنجوم XTR
+                provider_token="", 
                 currency="XTR", 
                 prices=[types.LabeledPrice("اشتراك", amount)]
             )
@@ -219,7 +219,7 @@ def handle_callbacks(call):
         data_parts = call.data.split("_")
         user_id = int(data_parts[1])
         duration = data_parts[2] if len(data_parts) > 2 else "محدد"
-        activate_user(user_id, status= active )
+        activate_user(user_id, status='active')
         bot.send_message(user_id, f"✅ تم تفعيل اشتراكك يدوياً بنجاح! ({duration})")
         bot.answer_callback_query(call.id, "تم تفعيل المشترك بنجاح")
         try:
@@ -241,12 +241,12 @@ def handle_callbacks(call):
 def checkout(pre_checkout_query):
     bot.answer_pre_checkout_query(pre_checkout_query.id, ok=True)
 
-@bot.message_handler(content_types=[ successful_payment ])
+@bot.message_handler(content_types=['successful_payment'])
 def successful_payment(message):
-    activate_user(message.chat.id, status= active )
+    activate_user(message.chat.id, status='active')
     bot.reply_to(message, "✅ شكراً لك! تم تفعيل اشتراك النجوم تلقائياً بنجاح.")
 
-@bot.message_handler(content_types=[ photo ])
+@bot.message_handler(content_types=['photo'])
 def handle_receipt(message):
     uid = message.chat.id
     
@@ -272,7 +272,7 @@ def save_apk_file(message):
         file_info = bot.get_file(message.document.file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         save_path = os.path.join(UPLOADS_DIR, f"{message.chat.id}_{message.document.file_name}")
-        with open(save_path,  wb ) as new_file:
+        with open(save_path, 'wb') as new_file:
             new_file.write(downloaded_file)
         
         conn = sqlite3.connect(DB_PATH, check_same_thread=False)
@@ -287,4 +287,3 @@ def save_apk_file(message):
 if __name__ == "__main__":
     print("جاري تشغيل البوت...")
     bot.infinity_polling()
-
